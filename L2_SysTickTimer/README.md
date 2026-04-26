@@ -1,40 +1,114 @@
-# Vấn đề
-Bài 2 này được tạo là để thay thế cái vòng for delay trong bài 1. Khi dùng hàm delay trong bài 1 (thường được gọi là software Timer) thì __asm("nop) được thực thi. Khi này ta không biết rỏ là bao nhiêu chu kì CPU ví dụ như đối với CPU chạy tần số là 16MHz là 1 giây đi thì với CPU 160MHz lúc này chỉ còn lại 0.1 giây thôi Thêm vào đó về vấn đề optimaze của compiler thì khi đổi từ `-O0` (không tối ưu) sang `-O3` (tối ưu tối đa), thằng GCC thấy cái vòng lặp vô nghĩa quá, nó xóa luôn hàm delay đi.
+# L2_SysTickTimer - Ghi chú học lại
 
-# Tổng quan về System Tick
-System Tick là ngoại vi core của Cortex ARM M4. có 24 bit đếm ngược. Khi đếm về 0 thì kích hoạt ngắt. System Tick này thường được dùng để triển khai chức năng định thời cho các OS thường thấy nhất là trong RTOS khi cấu hình CubeMX khi bật FreeRTOS lên thì phải dùng timer khác vì systeam Tick bị dùng cho OS. 
+Bài L2 thay cho delay vòng lặp của L1 bằng SysTick để có mốc thời gian ổn định hơn và ít phụ thuộc vào tối ưu hóa compiler.
 
+## 1) Mục tiêu bài này
 
-Đầu tiên phải viết file startup `L2_SysTickTimer/Src/startup_g4.c`
-File startup này khác startup kia ở chỗ cấu hình thêm `SysTick_Handler`. Cấu hình ở vị trí số 15 trong bảng vector table của chip Cortex arm M4 đọc tài liệu `PM0214`.
+- Hiểu vì sao delay bằng vòng `for` không đáng tin khi đổi tần số hoặc mức tối ưu.
+- Dùng SysTick của Cortex-M4 để tạo tick 1 ms.
+- Viết `delay_ms()` dựa trên biến đếm tăng trong ISR.
+- Nháy LED PC6 theo chu kỳ định trước bằng SysTick.
 
-# Cách dùng System Tick
-Vì là ngoại vi cơ bản của Chip M4 nên mặc định sẽ có sẵn và chỉ cần 4 thanh ghi để cấu hình. 
+## 2) Vấn đề của delay kiểu bận (busy-wait)
 
-1. `SYST_CSR`:Điều khiển hoạt động của counter SysTick và cung cấp thông tin trạng thái
+Ở L1, delay phụ thuộc vào:
 
-2. `SYST_RVR`: Reload Value Register Là thanh ghi chỉ định khởi đầu dùng để đặt giá trị khởi tạo của timer
+- Tần số CPU thực tế.
+- Số chu kỳ cho mỗi vòng lặp.
+- Mức tối ưu (`-O0`, `-O2`, `-O3`) của compiler.
 
-Ví dụ: Muốn Clock Cycle là 1ms mà tần số chip là 16MHz thì phải là 16000 Cycle. Tức là đếm xuống 16000 - 1 là sẽ trigger. Lúc này sẽ set giá trị của register `SYST_RVR` là 15999. 
+Vì vậy cùng một hằng số delay có thể cho thời gian khác nhau trên mỗi cấu hình build.
 
-3. `SYST_CVR`: System Tick Current value register giữ giá trị hiện tại của counter. Có thể sử dụng register này để theo dõi counter. 
+## 3) SysTick trong bài này
 
-Note: Luôn ghi 0 vào đây ở bước cấu hình đầu tiên để dọn rác trước khi cho timer chạy.
+SysTick là timer lõi (core peripheral) của ARM Cortex-M, có bộ đếm 24-bit đếm xuống.
 
-4. `SYST_CALIB`: System Tick Calibration value: Register này cung cấp các properties hiệu chuẩn bộ đếm thời gian. 
+Khi đếm từ giá trị reload về 0:
 
-Nói chung là mấy thanh ghi này trong tài liệu `PM0214` viết chi tiết nên có thể xem thêm.
+- Cờ COUNTFLAG được set.
+- Nếu bật ngắt, CPU nhảy vào `SysTick_Handler()`.
 
-# Makefile
+## 4) Cấu hình theo code hiện tại
 
-Trong bài này có thay đổi 1 tí về makefile so với bài 1 là thêm header file
+### 4.1 Các thanh ghi dùng
 
-```Makefile
-CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
-	-Wformat-truncation -fno-common -Wconversion \
-	-g3 -O0 -ffunction-sections -fdata-sections -I. -I$(INC_DIR)\
-	-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 $(EXTRA_CFLAGS)
+- `STK_LOAD` (0xE000E014): giá trị reload.
+- `STK_VAL` (0xE000E018): giá trị đếm hiện tại.
+- `STK_CTRL` (0xE000E010): enable, chọn clock và bật ngắt.
 
+### 4.2 Tạo tick 1 ms
+
+Code đang dùng `SYSCLK_HZ = 16000000`.
+
+Giá trị reload:
+
+$$reload = \frac{16{,}000{,}000}{1000} - 1 = 15999$$
+
+Nếu `reload` vượt giới hạn 24-bit (`0x00FFFFFF`) thì hàm init trả lỗi.
+
+### 4.3 Chuỗi khởi tạo trong `sysTick_Init()`
+
+1. Kiểm tra `sysclk_hz >= 1000`.
+2. Tính `reload = (sysclk_hz / 1000) - 1`.
+3. Kiểm tra không vượt `STK_RELOAD_MAX`.
+4. Ghi `STK_LOAD = reload`.
+5. Ghi `STK_VAL = 0` để reset counter.
+6. Bật `ENABLE`, `TICKINT`, `CLKSOURCE` trong `STK_CTRL`.
+
+## 5) Luồng chương trình
+
+Trong `main()`:
+
+1. Gọi `sysTick_Init(SYSCLK_HZ)`.
+2. Bật clock GPIOC và set PC6 output.
+3. Vòng lặp vô hạn:
+   - Bật LED.
+   - `delay_ms(200)`.
+   - Tắt LED.
+   - `delay_ms(200)`.
+
+Trong `SysTick_Handler()`:
+
+- Tăng biến toàn cục `system_tick` mỗi 1 ms.
+
+Trong `delay_ms(ms)`:
+
+- Lưu mốc `startTime = system_tick`.
+- Chờ đến khi `system_tick - startTime >= ms`.
+
+## 6) Vector table và startup
+
+SysTick exception nằm ở vị trí 15 trong bảng vector của Cortex-M.
+
+Trong `startup_g4.c`, vector table đã trỏ đúng tới `SysTick_Handler`.
+
+## 7) Build và flash
+
+Trong thư mục `L2_SysTickTimer`:
+
+```bash
+make
+make flash
 ```
 
+Lưu ý trong Makefile đã bật `-g3 -O0` để thuận tiện debug.
 
+## 8) Cách test nhanh
+
+1. Flash firmware.
+2. Quan sát LED PC6.
+3. LED phải nháy với chu kỳ xấp xỉ 400 ms (200 ms bật + 200 ms tắt).
+
+## 9) Lỗi hay gặp
+
+- Quên map `SysTick_Handler` trong vector table.
+- Không bật bit `TICKINT` nên `system_tick` không tăng.
+- Không ghi `STK_VAL = 0` trước khi start.
+- Nhầm tần số hệ thống, dẫn tới sai mốc ms.
+
+## 10) Ghi nhớ nhanh
+
+1. SysTick reload cho 1 ms: `sysclk/1000 - 1`.
+2. ISR chỉ làm việc nhỏ: tăng `system_tick`.
+3. `delay_ms()` dựa trên chênh lệch tick.
+4. Muốn đúng thời gian thì phải chắc `SYSCLK_HZ` đúng.

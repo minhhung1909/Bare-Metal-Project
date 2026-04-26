@@ -1,1 +1,5 @@
-install
+install/
+
+# Build outputs from lesson folders
+build/
+**/build/

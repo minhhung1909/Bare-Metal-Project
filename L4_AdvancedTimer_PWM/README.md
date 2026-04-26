@@ -1,54 +1,107 @@
-Bài 4: Advaced Timer (TIM1)
+# L4_AdvancedTimer_PWM - Ghi chú học lại
 
+Bài L4 tập trung vào Advanced Timer TIM1 để tạo PWM bằng phần cứng trên chân PA8.
 
+## 1) Mục tiêu bài này
 
-![Mô tả PWM](docs/img/L4/STM32-PWM-Example-Tutorial-STM32-Timer-PWM-Mode.jpg)
+- Hiểu cách tạo PWM bằng TIM1 mà không cần can thiệp CPU trong lúc chạy.
+- Xuất PWM ra chân PA8 (TIM1_CH1, AF6).
+- Thiết lập PWM tần số 50 Hz.
+- Thiết lập duty ban đầu khoảng 10%.
 
-So sánh thanh ghi counter và thanh ghi CCR thì sẽ xác định được xung PWM là 0 hay là 1. 
+## 2) Trạng thái code hiện tại
 
+Trong `main()` đang gọi `init_PWM_PA8()` và chạy vòng lặp vô hạn.
 
-## 1. Mục tiêu
+Lưu ý:
 
-Project này hướng dẫn cách sử dụng bộ định thời nâng cao (Advanced-control Timer - TIM1) để tạo ra tín hiệu Điều chế độ rộng xung (PWM - Pulse Width Modulation). Tín hiệu PWM sinh ra được định tuyến vật lý ra chân PA8, phục vụ cho việc điều khiển tốc độ động cơ (ESC), điều khiển góc quay Servo hoặc thay đổi độ sáng LED.
+- File vẫn còn hàm `init_TIM6()` và `TIM6_DAC_IRQHandler()` từ bài trước để tham khảo.
+- Luồng PWM hiện tại không dùng ngắt TIM6.
 
-Đặc điểm hệ thống:
+## 3) Kiến thức cốt lõi về PWM
 
-Tần số xung đầu ra: 50Hz (Chuẩn điều khiển Servo).
+Ba thanh ghi quan trọng:
 
-Duty Cycle ban đầu: 10%.
+1. `PSC`: chia clock timer.
+2. `ARR`: quyết định chu kỳ PWM.
+3. `CCR1`: quyết định độ rộng xung mức cao (duty).
 
-Vi xử lý (CPU) được giải phóng 100% tài nguyên nhờ tính năng Hardware Autonomy (Phần cứng tự trị).
----
+Công thức:
 
-Dưới đây là bản tài liệu kỹ thuật được chuẩn hóa, mang đúng phong cách "Kỹ sư Hệ thống". Mày có thể copy toàn bộ nội dung này, lưu thành file `README_TIM1_PWM.md` ném lên Github hoặc kẹp vào hồ sơ thiết kế Flight Controller của mày.
+$$f_{PWM} = \frac{f_{TIM}}{(PSC + 1)(ARR + 1)}$$
 
----
+$$Duty = \frac{CCR1}{ARR + 1} \times 100\%$$
 
+## 4) Cấu hình theo code của bài này
 
-## 2. Lõi Toán Học & Thanh Ghi
+### 4.1 Clock và chân output
 
-Toàn bộ hình thái của tín hiệu PWM được quyết định bởi 3 thanh ghi cốt lõi. Ghi nhớ quy tắc: *Phần cứng đếm từ 0, nên giá trị nạp vào Timer luôn là `N - 1`*.
+- Bật clock GPIOA: `RCC_AHB2ENR` bit 0.
+- Bật clock TIM1: `RCC_APB2ENR` bit 11.
+- Set PA8 mode AF (`GPIOA_MODER` = `10`).
+- Chọn AF6 cho PA8 (`GPIOA_AFRH`).
 
-1. **PSC (Prescaler):** Hộp số giảm tốc cho xung nhịp gốc.
-2. **ARR (Auto-Reload Register):** Vạch trần nhà. Quyết định **Chu kỳ (Period)** và **Tần số (Frequency)**.
-   * *Công thức tính Tần số PWM:*
-     $$f_{PWM} = \frac{f_{TIM\_CLK}}{(PSC + 1) \times (ARR + 1)}$$
-3. **CCRx (Capture/Compare Register):** Vạch đích phụ. Quyết định **Độ rộng xung (Duty Cycle)**.
-   * *Công thức tính Duty Cycle:*
-     $$Duty = \left( \frac{CCRx}{ARR + 1} \right) \times 100\%$$
+### 4.2 Tần số PWM
 
----
+Code đang set:
 
-## 3. Trình Tự Khởi Tạo Phần Cứng (PWM Mode 1)
+- `TIM1_PSC = 160 - 1`
+- `TIM1_ARR = 2000 - 1`
 
-Việc khởi động Advanced Timer yêu cầu tuân thủ nghiêm ngặt 7 bước sau:
+Với giả định clock TIM1 là 16 MHz:
 
-1. **Cấp Nguồn (Clock):** Bật điện cho Bus GPIO tương ứng và Bus APB2 (nơi TIM1 trú ngụ).
-2. **Trổ Cửa Sổ (Alternative Function - AF):** * Cấu hình chân GPIO ở chế độ `Alternate Function`.
-   * Định tuyến chân đó vào đúng kênh của TIM1 (Ví dụ: `PA8` map với `AF6` để ra `TIM1_CH1`).
-3. **Chốt Tần Số:** Nạp `PSC` và `ARR` theo chuẩn tần số mục tiêu (VD: 50Hz).
-4. **Chốt Độ Rộng Xung:** Nạp giá trị khởi tạo vào `CCRx`.
-5. **Cấu Hình Chế Độ (OCxM):** Ghi giá trị `0110` (PWM Mode 1) vào thanh ghi `CCMRx`. Khuyến nghị bật thêm bit Preload (`OCxPE`) để xung mượt hơn.
-6. **Mở Cổng & Chốt An Toàn:** * Bật ngõ ra trên kênh vật lý (`CCxE` trong `CCER`).
-   * **[TỬ HUYỆT]:** Bật Main Output Enable (`MOE` trong `BDTR`). Quên bit này, TIM1 sẽ bị khóa mõm hoàn toàn.
-7. **Kích Nổ:** Bật Counter Enable (`CEN` trong `CR1`) để bắt đầu băm xung.
+$$f_{PWM} = \frac{16{,}000{,}000}{160 \times 2000} = 50\text{ Hz}$$
+
+### 4.3 Duty ban đầu
+
+Code set `TIM1_CCR1 = 200`.
+
+$$Duty = \frac{200}{2000} \times 100\% = 10\%$$
+
+### 4.4 Chế độ PWM và enable output
+
+- `TIM1_CCMR1` set `OC1M = 110` (PWM Mode 1).
+- Bật `OC1PE` (preload CCR1).
+- `TIM1_CCER` bật `CC1E` để xuất ra kênh 1.
+- `TIM1_BDTR` bật `MOE` (bit bắt buộc của Advanced Timer).
+- `TIM1_CR1` bật `CEN` để timer bắt đầu đếm.
+
+## 5) Build và flash
+
+Trong thư mục `L4_AdvancedTimer_PWM`:
+
+```bash
+make
+make flash
+```
+
+## 6) Cách test nhanh
+
+1. Flash firmware.
+2. Đo tại PA8 bằng oscilloscope/logic analyzer.
+3. Kỳ vọng:
+   - Tần số gần 50 Hz.
+   - Duty khoảng 10%.
+
+Nếu không có scope, có thể tạm nối LED + điện trở để quan sát mức sáng thay đổi khi thay `CCR1` (không chính xác bằng scope nhưng dễ kiểm tra nhanh).
+
+## 7) Lỗi hay gặp
+
+- Quên set AF6 cho PA8.
+- Quên bật `MOE` trong `BDTR` (TIM1 không xuất xung dù timer vẫn chạy).
+- Nhầm công thức `PSC/ARR` dẫn tới sai tần số.
+- Viết nhầm `CCRx` ngoài khoảng `0..ARR+1`.
+
+## 8) Hướng mở rộng
+
+1. Viết hàm cập nhật duty runtime (ví dụ theo phần trăm).
+2. Kết hợp ngắt/timer khác để sweep duty tự động.
+3. Dùng nhiều channel TIM1 để xuất PWM đa kênh.
+4. Tìm hiểu thêm dead-time/complementary output cho bài điều khiển công suất.
+
+## 9) Ghi nhớ nhanh
+
+1. PWM muốn ra được ở TIM1 phải có cả `CC1E` và `MOE`.
+2. `PSC` + `ARR` quyết định tần số.
+3. `CCR1` quyết định duty.
+4. Cấu hình đúng AF6 trên PA8 trước khi bật timer.
