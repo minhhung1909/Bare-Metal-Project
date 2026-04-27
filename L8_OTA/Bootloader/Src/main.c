@@ -11,7 +11,7 @@ static inline void __disable_irq(void) {
     __asm volatile ("cpsid i" : : : "memory");
 }
 
-// 3. hàm Set giá trị cho thanh ghi Stack Pointer (MSP) bằng lệnh Assembly "msr"
+// Hàm Set giá trị cho thanh ghi Stack Pointer (MSP) bằng lệnh Assembly "msr"
 static inline void __set_MSP(uint32_t topOfMainStack) {
     __asm volatile ("MSR msp, %0" : : "r" (topOfMainStack) : );
 }

@@ -14,12 +14,14 @@ static inline void __enable_irq(void) {
 }
 
 int main(void) {
+    // relocation vector table
     *(volatile uint32_t*)(0xE000ED08) = 0x08004000;
+    
     __enable_irq();
+    
     if (sysTick_Init(SYSCLK_HZ) != 0) {
         for (;;) {}
     }
-    // relocation vector table
 
     RCC_AHB2ENR |= (1U << 2); // Power supply to port C.
 
