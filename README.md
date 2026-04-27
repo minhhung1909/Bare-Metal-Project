@@ -1,12 +1,12 @@
 # Bare-Metal STM32G431 Learning Project
 
-Repo này ghi lại quá trình học lập trình nhúng Bare-Metal trên STM32G431: tự viết startup, linker script, vector table, cấu hình ngoại vi bằng thanh ghi, build bằng GCC và nạp qua ST-Link.
+Repo này ghi lại quá trình học lập trình nhúng Bare-Metal trên STM32G431 theo hướng "tự làm từ thấp lên cao": tự viết startup, linker script, vector table, cấu hình ngoại vi bằng thanh ghi, build bằng GCC và nạp qua ST-Link.
 
 ## 1) Mục tiêu của project
 
-- Hiểu rõ cách MCU khởi động từ reset đến `main()`.
+- Hiểu rõ chuỗi khởi động MCU từ reset đến `main()`.
 - Làm việc trực tiếp với thanh ghi, không dùng HAL/LL.
-- Nắm chắc ngắt (NVIC), timer, PWM, UART.
+- Nắm chắc ngắt (NVIC), timer, PWM, UART, DMA, flash nội.
 - Xây nền tảng debug với OpenOCD + GDB để tự xử lý bug firmware.
 
 ## 2) Yêu cầu môi trường
@@ -44,8 +44,10 @@ Sau đó quay lại WSL để build/flash.
 - `L2_SysTickTimer/`: SysTick 1 ms + delay ổn định.
 - `L3_BasicTimer_INT/`: TIM6 + ngắt định kỳ.
 - `L4_AdvancedTimer_PWM/`: TIM1 PWM trên PA8.
-- `L5_Uart_NVIC/`: USART2 TX/RX + ngắt RXNE (NVIC).
-- `L6_Uart_DMA/`: USART2 RX dùng DMA + DMAMUX, chạy circular mode.
+- `L5_Uart_NVIC/`: USART2 TX/RX + ngắt RXNE.
+- `L6_Uart_DMA/`: USART2 RX bằng DMA + DMAMUX ở circular mode.
+- `L7_Flash/`: thao tác flash nội (erase page + program double-word).
+- `L8_OTA/`: khung OTA gồm Bootloader + App1 + App2.
 - `GDB.md`: tài liệu debug chi tiết bằng GDB.
 - `Scheduler.md`: lộ trình học theo tuần.
 - `docs/`: tài liệu tham khảo và hình minh họa.
@@ -60,27 +62,39 @@ Sau đó quay lại WSL để build/flash.
 | L4 | `L4_AdvancedTimer_PWM` | TIM1 PWM Mode 1, PSC/ARR/CCR, AF | [L4_AdvancedTimer_PWM/README.md](L4_AdvancedTimer_PWM/README.md) |
 | L5 | `L5_Uart_NVIC` | USART2 polling + interrupt RXNE | [L5_Uart_NVIC/README.md](L5_Uart_NVIC/README.md) |
 | L6 | `L6_Uart_DMA` | USART2 RX bằng DMA circular + TC interrupt | [L6_Uart_DMA/README.md](L6_Uart_DMA/README.md) |
+| L7 | `L7_Flash` | Erase/program flash nội bằng thanh ghi | [L7_Flash/README.md](L7_Flash/README.md) |
+| L8 | `L8_OTA` | Khung bootloader + phân vùng app | [L8_OTA/README.md](L8_OTA/README.md) |
 
 ## 5) Build và flash
 
-### 5.1 Build/flash một bài
+### 5.1 Build/flash một bài độc lập (L1 -> L7)
 
-Ví dụ với bài UART:
+Ví dụ với bài flash:
 
 ```bash
-cd L5_Uart_NVIC
+cd L7_Flash
 make
 make flash
 ```
 
-### 5.2 Build nhanh tất cả bài
+### 5.2 Build nhanh các bài độc lập (L1 -> L7)
 
 ```bash
-for d in L1_Blink L2_SysTickTimer L3_BasicTimer_INT L4_AdvancedTimer_PWM L5_Uart_NVIC L6_Uart_DMA; do
+for d in L1_Blink L2_SysTickTimer L3_BasicTimer_INT L4_AdvancedTimer_PWM L5_Uart_NVIC L6_Uart_DMA L7_Flash; do
 	echo "==> $d"
 	(cd "$d" && make clean && make) || break
 done
 ```
+
+### 5.3 Build cho bài L8 (nhiều subproject)
+
+```bash
+(cd L8_OTA/Bootloader && make clean && make)
+(cd L8_OTA/App1 && make clean && make)
+(cd L8_OTA/App2 && make clean && make)
+```
+
+Với L8, thao tác nạp sẽ tùy theo chiến lược map flash của bootloader/app. Xem chi tiết trong `L8_OTA/README.md`.
 
 ## 6) Debug nhanh
 
@@ -96,7 +110,7 @@ Tài liệu đầy đủ xem tại [GDB.md](GDB.md).
 
 - Startup và vector table tự viết trong `startup_g4.c`.
 - Tên hàm ISR phải khớp tuyệt đối với tên trong vector table.
-- Các bài đều bật `-g3 -O0` để phục vụ debug.
+- Hầu hết bài học đều bật `-g3 -O0` để dễ debug.
 - Địa chỉ thanh ghi chủ yếu được gom trong `register.h` (từ các bài sau).
 
 ## 8) Lưu ý khi mở bằng VS Code
