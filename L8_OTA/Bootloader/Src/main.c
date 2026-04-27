@@ -6,10 +6,7 @@
 #include "register.h"
 #include "ota.h"
 
-// 1. Định nghĩa __IO là volatile (báo cho compiler không được tối ưu hóa)
-#define __IO volatile
-
-// 2. hàm tắt ngắt toàn cục bằng lệnh Assembly "cpsid i" của lõi Cortex-M
+// hàm tắt ngắt toàn cục bằng lệnh Assembly "cpsid i" của lõi Cortex-M
 static inline void __disable_irq(void) {
     __asm volatile ("cpsid i" : : : "memory");
 }
@@ -31,12 +28,12 @@ void Jump_To_App(uint32_t app_address)
     __disable_irq();
 
     // Bypass 4byte to resethandler
-    uint32_t jump_address = *(__IO uint32_t*)(app_address + 4);
+    uint32_t jump_address = *(volatile uint32_t*)(app_address + 4);
 
     pFunction Jump_To_Application = (pFunction) jump_address;
 
     // 4. Set MSP for new app (because before bypass 4 byte)
-    __set_MSP(*(__IO uint32_t*)app_address);
+    __set_MSP(*(volatile uint32_t*)app_address);
 
     Jump_To_Application(); 
 }
