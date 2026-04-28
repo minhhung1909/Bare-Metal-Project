@@ -1,7 +1,9 @@
 #include <stdint.h>
+#include "Systick.h"
 
 extern uint32_t _sbss, _ebss, _sdata, _edata, _sidata, _estack;
 extern void SysTick_Handler(void);
+extern void DMA1_Channel1_IRQHandler(void);
 extern int main(void);
 
 // Hàm Reset Handler
@@ -21,10 +23,11 @@ __attribute__((naked, noreturn)) void _reset(void) {
 // Bảng Vector
 __attribute__((section(".vectors"))) 
 void (*const tab[16 + 91])(void) = {// 16 là System Exceptions của arm còn 19 là External Interrupts của ST
-    (void (*)(void))&_estack,       // <-- 4 byte đầu tiên
-    _reset,                          // <-- 4 byte tiếp theo
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0,
-    0,
-    SysTick_Handler
+    [0] = (void (*)(void))&_estack,       // <-- 4 byte đầu tiên Stack pointer
+    [1] = _reset,                          // <-- 4 byte tiếp theo Reset Handler
+    // 0, 0, 0, 0, 0, 0, 0, 0,
+    // 0, 0, 0, 0,
+    // 0,
+    [15] = SysTick_Handler,
+    [16+11] = DMA1_Channel1_IRQHandler
 };

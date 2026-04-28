@@ -80,7 +80,7 @@
 #define DMA_CMAR1               (*(volatile uint32_t *) (DMA1_BASE_ARR + (0x14 + 0x14 * (1 - 1)) ) )
 #define DMA_CNDTR1              (*(volatile uint32_t *) (DMA1_BASE_ARR + (0x0C + 0x14 * (1 - 1)) ) )
 #define DMA_CCR1                (*(volatile uint32_t *) (DMA1_BASE_ARR + (0x08 + 0x14 * (1 - 1)) ) )
-#define DMA1_IFCR               (*(volatile uint32_t *) (DMA1_BASE_ARR + 0x04))
+#define DMA_IFCR                (*(volatile uint32_t *) (DMA1_BASE_ARR + 0x04))
 
 /*Flash*/
 #define FLASH_SR                (*(volatile uint32_t *) (FLASH_INTERFACE_ARR + 0x10))

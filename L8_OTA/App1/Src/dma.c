@@ -1,5 +1,6 @@
 #include "dma.h"
-void DMA_init(char* data, uint16_t size)
+
+void DMA_init(uint8_t* data, uint16_t size)
 {
     /* Theo những dòng arm cũ hơn thì channel của DMA với các ngoại vi
     * Được fix cứng nhưng dòng G4 này mới hơn có mux của DMA nên không cần care chhannle
@@ -13,8 +14,8 @@ void DMA_init(char* data, uint16_t size)
     DMAMUX_C0CR &= ~(0x7FU << 0);
     DMAMUX_C0CR |= (26U << 0);
 
-    DMA_CPAR1 = (unsigned int)&USART2_RDR;      // Lưu địa chỉ USART2_RDR cho DMA để lấy dữ liệu
-    DMA_CMAR1 = (unsigned int)data;             // Lấy địa chỉ để lưu dữ liệu vào mảng
+    DMA_CPAR1 = (uint32_t)&USART2_RDR;      // Lưu địa chỉ USART2_RDR cho DMA để lấy dữ liệu
+    DMA_CMAR1 = (uint32_t)data;             // Lấy địa chỉ để lưu dữ liệu vào mảng
 
     // Number of data to transfe
     DMA_CNDTR1 = size;
