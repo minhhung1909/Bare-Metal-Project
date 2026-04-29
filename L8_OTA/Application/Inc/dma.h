@@ -3,6 +3,6 @@
 #include "register.h"
 #include <stdint.h>
 
-void DMA_init(char* data, uint16_t size);
+void DMA_init(uint8_t* data, uint16_t size);
 
 #endif

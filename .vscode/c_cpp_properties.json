@@ -1,0 +1,37 @@
+{
+    "configurations": [
+        {
+            "name": "STM32G431 Bare-Metal",
+            "includePath": [
+                "${workspaceFolder}/L1_Blink",
+                "${workspaceFolder}/L1_Blink/linker",
+                "${workspaceFolder}/L2_SysTickTimer",
+                "${workspaceFolder}/L2_SysTickTimer/Inc",
+                "${workspaceFolder}/L3_BasicTimer_INT/Inc",
+                "${workspaceFolder}/L4_AdvancedTimer_PWM/Inc",
+                "${workspaceFolder}/L5_Uart_NVIC/Inc",
+                "${workspaceFolder}/L6_Uart_DMA/Inc",
+                "${workspaceFolder}/L7_Flash/Inc",
+                "${workspaceFolder}/L8_OTA/Bootloader/Inc",
+                "${workspaceFolder}/L8_OTA/App1/Inc",
+                "${workspaceFolder}/L8_OTA/App2/Inc"
+            ],
+            "defines": [
+                "STM32G431xx",
+                "__arm__",
+                "__GNUC__"
+            ],
+            "compilerPath": "${env:PATH}",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-arm",
+            "compilerArgs": [
+                "-mcpu=cortex-m4",
+                "-mthumb",
+                "-mfloat-abi=hard",
+                "-mfpu=fpv4-sp-d16"
+            ]
+        }
+    ],
+    "version": 4
+}
