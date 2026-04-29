@@ -3,21 +3,50 @@
 
 #include <stdint.h>
 
-#define OTA_MAGIC 0xDEADBEEF
-#define MAX_FIRMWARE_SIZE 16384  // 16KB per receive
+#define MAX_SIZE_BUFF   136
 
-typedef struct {
-    uint32_t magic;
-    uint16_t firmware_len;
-    uint16_t reserved;
-    uint32_t firmware_crc;
-} __attribute__((packed)) OTA_Header_t;
+#define ADDRESS_FLAG_APP1           0x08004000U
+#define ADDRESS_FLAG_APP2           0x08012000U
 
-// Receive OTA packet header + firmware via polling UART
-// Returns 0 on success, error code on failure
-uint8_t receive_ota_packet(uint8_t *firmware_buf, uint16_t *out_len, uint32_t *out_crc);
+#define OTA_HEADER      0xA5
+#define OTA_ACK         0x06
+#define OTA_NACK        0x15
 
-// Program firmware to opposite slot with CRC validation
-void program_ota_firmware(uint8_t *firmware_buf, uint16_t firmware_len, uint32_t firmware_crc);
+typedef enum
+{
+    /* 4 byte version | 4 byte Total Byte | 2 byte total frame | 4 byte crc của file bin*/
+    OTA_START = 0x01,
+    OTA_DATA = 0x02,
+    OTA_END = 0x03
+} command_id_t;
+
+// typedef struct
+// {
+//     uint16_t Header;
+//     uint16_t length;
+//     command_id_t CommandId;
+//     uint16_t reserved;
+//     uint32_t firmware_crc;
+// } __attribute__((packed)) OTA_Header_t;
+
+typedef struct
+{
+    uint16_t Header;
+    uint16_t Seq_num;
+    uint8_t CommandId;
+    uint8_t Length;
+    uint8_t Payload[128];
+    uint32_t CRC32;
+} __attribute__((packed)) OTA_Packet_t;
+
+typedef struct
+{
+    uint16_t Header;
+    uint16_t Seq_num;
+    uint8_t CommandId;
+    uint32_t CRC32;
+} __attribute__((packed)) OTA_Respose_t;
+
+void OTA_Process_Buffer (uint8_t *rx_buffer);
 
 #endif /* OTA_H */

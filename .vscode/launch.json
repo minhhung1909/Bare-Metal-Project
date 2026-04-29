@@ -1,11 +1,10 @@
 {
     "version": "0.2.0",
     "configurations": [
-        
         {
             "name": "Debug STM32G4 Bare-Metal",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/L8_OTA/App1/build/firmware.elf",
+            "executable": "${workspaceFolder}/L8_OTA/Application/build/firmware.elf",
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",

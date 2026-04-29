@@ -6,102 +6,161 @@
 #include "flash.h"
 #include "register.h"
 
-// Receive OTA packet header + firmware via polling UART
-// Packet format: [4B magic][2B len][2B reserved][4B CRC][N bytes firmware]
-uint8_t receive_ota_packet(uint8_t *firmware_buf, uint16_t *out_len, uint32_t *out_crc)
+static uint16_t expected_seq = 0;
+static uint32_t current_flash_addr = 0;
+
+static uint32_t incoming_version = 0;
+static uint32_t incoming_total_bytes = 0;
+static uint16_t incoming_total_frames = 0;
+static uint32_t incoming_global_crc = 0;
+typedef void (*pFunction)(void);
+
+// Hàm Set giá trị cho thanh ghi Stack Pointer (MSP) bằng lệnh Assembly "msr"
+static inline void __set_MSP(uint32_t topOfMainStack)
 {
-    OTA_Header_t header;
-    uint8_t *p = (uint8_t *)&header;
-    
-    // Receive 12-byte header
-    for (uint16_t i = 0; i < (uint16_t)sizeof(OTA_Header_t); i++) {
-        p[i] = UART_Receiver();
-    }
-    
-    // Validate magic
-    if (header.magic != OTA_MAGIC) {
-        const char err[] = "ERR: Invalid magic\r\n";
-        UART_Transmit_multi((char*)err, sizeof(err) - 1);
-        return 1;
-    }
-    
-    // Validate firmware length
-    if (header.firmware_len == 0 || header.firmware_len > MAX_FIRMWARE_SIZE) {
-        const char err[] = "ERR: Invalid firmware length\r\n";
-        UART_Transmit_multi((char*)err, sizeof(err) - 1);
-        return 2;
-    }
-    
-    // Receive firmware data
-    for (uint16_t i = 0; i < header.firmware_len; i++) {
-        firmware_buf[i] = UART_Receiver();
-    }
-    
-    // Calculate CRC on received firmware
-    uint32_t calc_crc = Hardware_CRC_Calculate(firmware_buf, header.firmware_len);
-    
-    // Validate CRC
-    if (calc_crc != header.firmware_crc) {
-        const char err[] = "ERR: CRC mismatch\r\n";
-        UART_Transmit_multi((char*)err, sizeof(err) - 1);
-        return 3;
-    }
-    
-    *out_len = header.firmware_len;
-    *out_crc = header.firmware_crc;
-    
-    const char ok[] = "OK: Packet received\r\n";
-    UART_Transmit_multi((char*)ok, sizeof(ok) - 1);
-    
-    return 0;  // Success
+    __asm volatile("MSR msp, %0" : : "r"(topOfMainStack) :);
 }
 
-// Program firmware to opposite slot
-void program_ota_firmware(uint8_t *firmware_buf, uint16_t firmware_len, uint32_t firmware_crc)
+static inline void __disable_irq(void)
 {
-    (void)firmware_crc;  // Parameter used for validation in receive, not needed here
-    
+    __asm volatile("cpsid i" : : : "memory");
+}
+
+static inline void __enable_irq(void)
+{
+    __asm volatile("cpsie i" : : : "memory");
+}
+
+void Jump_To_App(uint32_t app_address)
+{
+    // Bypass 4byte to resethandler
+    uint32_t jump_address = *(volatile uint32_t *)(app_address + 4);
+
+    pFunction Jump_To_Application = (pFunction)jump_address;
+
+    // Set MSP for new app (because before bypass 4 byte)
+    __set_MSP(*(volatile uint32_t *)app_address);
+
+    Jump_To_Application();
+}
+
+static uint32_t get_location_app()
+{
     // Detect current app location from VTOR
-    uint32_t current_vtor = *(volatile uint32_t*)(0xE000ED08);
-    uint32_t target_addr;
-    uint8_t target_page_start;
-    uint8_t next_app_slot;
-
-    if (current_vtor == 0x08004000) {
-        // Running App slot 1 → program slot 2
-        target_addr = 0x08012000;
-        target_page_start = 18;  // Page 18-23 (6 pages)
-        next_app_slot = 2;
-        const char msg[] = "Target: App2 slot\r\n";
-        UART_Transmit_multi((char*)msg, sizeof(msg) - 1);
-    } else {
-        // Running App slot 2 → program slot 1
-        target_addr = 0x08004000;
-        target_page_start = 8;   // Page 8-13 (6 pages)
-        next_app_slot = 1;
-        const char msg[] = "Target: App1 slot\r\n";
-        UART_Transmit_multi((char*)msg, sizeof(msg) - 1);
-    }
-
-    // Erase target pages (6 pages × 2KB = 12KB)
-    for (uint8_t page = target_page_start; page < (uint8_t)(target_page_start + 6); page++) {
+    uint32_t current_vtor = *(volatile uint32_t *)(0xE000ED08);
+    return (current_vtor == ADDRESS_FLAG_APP1) ? ADDRESS_FLAG_APP2 : ADDRESS_FLAG_APP1;
+}
+static void determent_erase()
+{
+    uint32_t target_addr = get_location_app();
+    // App 1 (0x08004000) -> Page 8
+    // App 2 (0x08012000) -> Page 36
+    uint8_t target_page_start = (target_addr == ADDRESS_FLAG_APP2) ? 36 : 8;
+    
+    // Calculate required pages based on firmware size (2KB per page)
+    uint8_t num_pages = (uint8_t)((incoming_total_bytes + 2047) / 2048);
+    
+    for (uint8_t page = target_page_start; page < (uint8_t)(target_page_start + num_pages); page++)
+    {
+        __disable_irq();
         ErasePage(page);
+        __enable_irq();
+    }
+}
+
+static void program_ota_firmware(uint8_t *firmware_buf, uint8_t data_length)
+{
+    uint32_t target_addr = get_location_app() + current_flash_addr;
+    uint16_t double_words_count = (uint16_t)((data_length + 7U) / 8U);
+    uint64_t padded_data[16];
+
+    for (uint16_t i = 0; i < double_words_count; i++)
+    {
+        padded_data[i] = 0xFFFFFFFFFFFFFFFFULL;
+    }
+    memcpy(padded_data, firmware_buf, data_length);
+
+    Program_Flash((void *)target_addr, padded_data, double_words_count);
+    current_flash_addr += data_length;
+}
+
+static void Send_OTA_Response(uint16_t seq_num, uint8_t status)
+{
+    OTA_Respose_t res;
+    res.Header = OTA_HEADER;
+    res.Seq_num = seq_num;
+    res.CommandId = status;
+    res.CRC32 = Hardware_CRC_Calculate((uint8_t *)&res, 5);
+
+    UART_Transmit_multi((char *)&res, sizeof(OTA_Respose_t));
+}
+
+void OTA_Process_Buffer(uint8_t *rx_buffer)
+{
+    OTA_Packet_t *packed = (OTA_Packet_t *)rx_buffer;
+
+    if (packed->Header != OTA_HEADER)
+    {
+        Send_OTA_Response(expected_seq, OTA_START);
+        return;
     }
 
-    // Program firmware into target slot
-    uint16_t double_words_count = (uint16_t)((firmware_len + 7U) / 8U);
-    Program_Flash((void*)target_addr, (uint64_t*)firmware_buf, double_words_count);
+    uint32_t crc = Hardware_CRC_Calculate((uint8_t *)packed, sizeof(OTA_Packet_t) - 4);
 
-    // Update bootloader metadata (set active_app flag at 0x0801E800 + offset 1)
-    uint32_t *pOTA = (uint32_t*)0x0801E800;
-    *(pOTA + 1) = next_app_slot;  // Active_App field
+    if (crc != packed->CRC32)
+    {
+        Send_OTA_Response(expected_seq, OTA_NACK);
+        return;
+    }
 
-    const char done[] = "Done. Rebooting...\r\n";
-    UART_Transmit_multi((char*)done, sizeof(done) - 1);
+    if (packed->CommandId == OTA_START)
+    {
 
-    // Wait for UART to finish
-    for (volatile uint32_t i = 0; i < 500000UL; i++);
+        /*4 byte version | 4 byte Total Byte | 2 byte total frame | 4 byte crc của file bin */
+        incoming_version = *((uint32_t *)(&packed->Payload[0]));
+        incoming_total_bytes = *((uint32_t *)(&packed->Payload[4]));
+        incoming_total_frames = *((uint16_t *)(&packed->Payload[8]));
+        incoming_global_crc = *((uint32_t *)(&packed->Payload[10]));
 
-    // System reset via SCB AIRCR
-    *(volatile uint32_t*)0xE000ED0C = (0x5FAU << 16) | (1U << 2);
+        determent_erase();
+
+        current_flash_addr = 0;
+        expected_seq = 0;
+        Send_OTA_Response(expected_seq, OTA_ACK);
+        expected_seq++;
+        return;
+    }
+
+    switch (packed->CommandId)
+    {
+    case OTA_DATA:
+    {
+        uint8_t *pData = (uint8_t *)packed->Payload;
+        program_ota_firmware(pData, packed->Length);
+        Send_OTA_Response(expected_seq, OTA_ACK);
+        expected_seq++;
+        break;
+    }
+
+    case OTA_END:
+    {
+        uint32_t target_addr = get_location_app();
+        uint32_t bin_crc = Calculate_Flash_CRC(target_addr, incoming_total_bytes);
+        if (bin_crc == incoming_global_crc)
+        {
+            Send_OTA_Response(expected_seq, OTA_ACK);
+            Jump_To_App(target_addr);
+            // reset chip
+            AIRCR |= (0x5FA << 16) | (1U << 2);
+        }
+        else
+        {
+            Send_OTA_Response(expected_seq, OTA_NACK);
+        }
+
+        break;
+    }
+    default:
+        break;
+    }
 }

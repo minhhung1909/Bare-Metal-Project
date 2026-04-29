@@ -9,7 +9,7 @@ CFLAGS  ?=  -W -Wall -Wextra -Werror -Wundef -Wshadow -Wdouble-promotion \
 
 LDFLAGS ?= -Tg431.ld -nostartfiles -nostdlib --specs nano.specs -lc -lgcc -Wl,--gc-sections -Wl,-Map=$@.map
 
-SOURCES = $(SRC_DIR)/main.c $(SRC_DIR)/startup_g4.c $(SRC_DIR)/Systick.c $(SRC_DIR)/uart.c $(SRC_DIR)/flash.c $(SRC_DIR)/crc.c $(SRC_DIR)/ota.c 
+SOURCES = $(SRC_DIR)/main.c $(SRC_DIR)/startup_g4.c $(SRC_DIR)/Systick.c $(SRC_DIR)/uart.c $(SRC_DIR)/flash.c $(SRC_DIR)/crc.c $(SRC_DIR)/ota.c $(SRC_DIR)/dma.c 
 
 all: $(BUILD_DIR)/firmware.bin
 
