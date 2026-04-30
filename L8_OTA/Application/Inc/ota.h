@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define MAX_SIZE_BUFF   136
+#define MAX_SIZE_BUFF   138
 
 #define ADDRESS_FLAG_APP1           0x08004000U
 #define ADDRESS_FLAG_APP2           0x08012000U
@@ -31,12 +31,12 @@ typedef enum
 
 typedef struct
 {
-    uint16_t Header;
-    uint16_t Seq_num;
-    uint8_t CommandId;
-    uint8_t Length;
-    uint8_t Payload[128];
-    uint32_t CRC32;
+    uint16_t Header;            //
+    uint16_t Seq_num;           // 1
+    uint8_t CommandId;          //
+    uint8_t Length;             //  1
+    uint8_t Payload[128];       //  32
+    uint32_t CRC32;             // 1
 } __attribute__((packed)) OTA_Packet_t;
 
 typedef struct

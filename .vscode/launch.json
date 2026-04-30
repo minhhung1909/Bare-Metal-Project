@@ -4,7 +4,7 @@
         {
             "name": "Debug STM32G4 Bare-Metal",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/L8_OTA/Application/build/firmware.elf",
+            "executable": "${workspaceFolder}/L8_OTA/UART/build/firmware.elf",
             "request": "launch",
             "type": "cortex-debug",
             "runToEntryPoint": "main",

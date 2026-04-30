@@ -43,7 +43,7 @@ void Program_Flash(void* adrr, uint64_t *data_array, uint16_t size)
     // BIT 0: Flash programming enabled
     FLASH_CR |= (1U << 0);
 
-    uint32_t *write_addr = (uint32_t *)adrr;
+    volatile uint32_t *write_addr = (uint32_t *)adrr;
     for (int i = 0; i < size; i++)
     {
         uint32_t data_low = (uint32_t) data_array[i];

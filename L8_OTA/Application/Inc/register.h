@@ -85,7 +85,7 @@
 #define FLASH_BASE (0x40022000)
 #define FLASH_SR (*(volatile uint32_t *)(FLASH_BASE + 0x10))
 #define FLASH_CR (*(volatile uint32_t *)(FLASH_BASE + 0x14))
-#define FLASH_KEYR (*(volatile uint32_t *)(FLASH_BASE + 0x04))
+#define FLASH_KEYR (*(volatile uint32_t *)(FLASH_BASE + 0x08))
 
 
 #define AIRCR (*(volatile uint32_t *)0xE000ED0C)

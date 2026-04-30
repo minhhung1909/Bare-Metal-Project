@@ -47,7 +47,7 @@ Sau đó quay lại WSL để build/flash.
 - `L5_Uart_NVIC/`: USART2 TX/RX + ngắt RXNE.
 - `L6_Uart_DMA/`: USART2 RX bằng DMA + DMAMUX ở circular mode.
 - `L7_Flash/`: thao tác flash nội (erase page + program double-word).
-- `L8_OTA/`: khung OTA gồm Bootloader + App1 + App2.
+- `L8_OTA/`: Khung OTA hoàn chỉnh gồm Bootloader, Application (nhận OTA) và UART App (để test OTA).
 - `GDB.md`: tài liệu debug chi tiết bằng GDB.
 - `Scheduler.md`: lộ trình học theo tuần.
 - `docs/`: tài liệu tham khảo và hình minh họa.
@@ -63,7 +63,7 @@ Sau đó quay lại WSL để build/flash.
 | L5 | `L5_Uart_NVIC` | USART2 polling + interrupt RXNE | [L5_Uart_NVIC/README.md](L5_Uart_NVIC/README.md) |
 | L6 | `L6_Uart_DMA` | USART2 RX bằng DMA circular + TC interrupt | [L6_Uart_DMA/README.md](L6_Uart_DMA/README.md) |
 | L7 | `L7_Flash` | Erase/program flash nội bằng thanh ghi | [L7_Flash/README.md](L7_Flash/README.md) |
-| L8 | `L8_OTA` | Khung bootloader + phân vùng app | [L8_OTA/README.md](L8_OTA/README.md) |
+| L8 | `L8_OTA` | Hệ thống OTA qua UART (Bootloader + Ping Pong App) | [L8_OTA/README.md](L8_OTA/README.md) |
 
 ## 5) Build và flash
 
@@ -90,8 +90,8 @@ done
 
 ```bash
 (cd L8_OTA/Bootloader && make clean && make)
-(cd L8_OTA/App1 && make clean && make)
-(cd L8_OTA/App2 && make clean && make)
+(cd L8_OTA/Application && make clean && make)
+(cd L8_OTA/UART && make clean && make)
 ```
 
 Với L8, thao tác nạp sẽ tùy theo chiến lược map flash của bootloader/app. Xem chi tiết trong `L8_OTA/README.md`.

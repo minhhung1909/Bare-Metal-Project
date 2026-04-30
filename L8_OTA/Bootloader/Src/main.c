@@ -4,6 +4,10 @@
 
 #include "Systick.h"
 #include "register.h"
+#include "config.h"
+#include "uart.h"
+
+#define FLAG_ADDR 0x0801E800 // page 61
 
 // hàm tắt ngắt toàn cục bằng lệnh Assembly "cpsid i" của lõi Cortex-M
 static inline void __disable_irq(void)
@@ -37,28 +41,29 @@ void Jump_To_App(uint32_t app_address)
 
     Jump_To_Application();
 }
-
 int main(void)
 {
-    RCC_AHB2ENR |= (1U << 2);
-
-    GPIOC_MODER &= ~(3U << 26);
-
-    GPIOC_PUPDR &= ~(3U << 26); // Xóa sạch rác
-    GPIOC_PUPDR |= (2U << 26);  // Ghi số 2 (10 hệ nhị phân) vào vị trí 26
-
-    for (volatile int i = 0; i < 100; i++)
-        ;
-
-    if ((GPIOC_IDR & (1U << 13)) != 0)
+    uart_init();
+    OTA_Shared_Config_t *ota_shared = (volatile OTA_Shared_Config_t*) FLAG_ADDR;
+    char text[] = "hello from bootloader \r\n";
+    UART_Transmit_multi(text, sizeof(text));
+    // Not first times
+    char app1[] = "hello jump to app 1 \r\n";
+    char app2[] = "hello jump to app 2 \r\n";
+    
+    if (ota_shared->Magic_Word == 0xDEADBEEF)
     {
-        Jump_To_App(ADDRESS_FLAG_APP2);
-    }
-    else
-    {
+        if(ota_shared->Active_App == 1){
+            UART_Transmit_multi(app1, sizeof(app1));
+            Jump_To_App(ADDRESS_FLAG_APP1);
+        }
+        else{
+            UART_Transmit_multi(app2, sizeof(app2));
+            Jump_To_App(ADDRESS_FLAG_APP2);
+        }
+    }else{
         Jump_To_App(ADDRESS_FLAG_APP1);
     }
 
-    while (1)
-        ;
+    while (1);
 }

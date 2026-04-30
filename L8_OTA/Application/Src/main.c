@@ -7,6 +7,7 @@
 #include "crc.h"
 #include "ota.h"
 #include "dma.h"
+#include "config.h"
 
 __attribute__((aligned(8))) uint8_t firmware_buffer[MAX_SIZE_BUFF];
 
